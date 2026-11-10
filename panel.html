@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Panel interno</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/estilo.css">
+<style>
+  main{max-width:1040px;margin:0 auto}
+  .bar{display:grid;grid-template-columns:230px 1fr 90px;gap:12px;align-items:center;font-size:13.5px;font-weight:400;padding:7px 0;border-bottom:1px solid var(--line)}
+  .bar .pista{display:grid;gap:3px}
+  .bar .pista i{display:block;height:7px;border-radius:2px}
+  .bar .pista i.pre{background:var(--gris)} .bar .pista i.post{background:var(--vino)}
+  .ley span{display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:13px;font-weight:400;color:var(--muted)}
+  .ley i{width:12px;height:7px;border-radius:2px;display:inline-block}
+  .scroll{overflow:auto;max-height:420px}
+</style>
+</head>
+<body>
+<main>
+  <p class="sobre">Uso interno</p>
+  <h1>Panel de resultados</h1>
+  <p class="lead">Lee la hoja de Google Sheets mediante la clave definida en Apps Script. Los datos no se guardan en esta página.</p>
+  <div class="campos" style="grid-template-columns:1fr auto auto;align-items:end">
+    <label class="campo">Clave del panel<input id="clave" type="password" autocomplete="off"></label>
+    <button class="btn pri" id="cargar">Cargar datos</button>
+    <button class="btn" id="demo">Ver con datos simulados</button>
+  </div>
+  <p class="nota" id="msg"></p>
+  <div id="out"></div>
+</main>
+<script src="js/config.js"></script>
+<script src="js/items.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+let FILAS = [];
+
+$('#cargar').addEventListener('click', async () => {
+  if (!CONFIG.ENDPOINT) { $('#msg').textContent = 'Falta configurar ENDPOINT en js/config.js.'; return; }
+  $('#msg').textContent = 'Cargando.';
+  try {
+    const r = await fetch(CONFIG.ENDPOINT + '?clave=' + encodeURIComponent($('#clave').value));
+    const d = await r.json();
+    if (d.error) { $('#msg').textContent = 'Clave incorrecta.'; return; }
+    $('#msg').textContent = `${d.filas.length} eventos leídos.`;
+    pinta(d.filas, false);
+  } catch (e) { $('#msg').textContent = 'No se pudo leer la hoja. Revisa la URL y los permisos de la implementación.'; }
+});
+
+$('#demo').addEventListener('click', () => {
+  const f = [];
+  for (let n = 1; n <= 24; n++) {
+    const pid = 'S' + String.fromCharCode(64 + (n % 26 || 1)) + '-' + String(1000 + n * 37).slice(-4), forma = n % 2 ? 'A' : 'B';
+    ['pre', 'post'].forEach((fase) => ITEMS.forEach((p, i) => {
+      const prob = fase === 'pre' ? 0.38 + 0.05 * (i % 3) : 0.62 + 0.05 * (i % 3);
+      const ok = Math.random() < prob, it = p[fase === 'pre' ? forma : (forma === 'A' ? 'B' : 'A')];
+      const malas = it.ops.filter((o) => !o.ok);
+      f.push({ pid, semestre: '2026-2', forma_pre: forma, evento: 'respuesta_' + fase, item: p.id, habilidad: p.h, correcta: ok ? 1 : 0,
+        error: ok ? '' : malas[Math.floor(Math.random() * malas.length)].err, texto: p.abierta ? 'Sustento simulado.' : '', ms: 30000 + Math.random() * 60000 });
+    }));
+    f.push({ pid, evento: 'fin', ms: (22 + Math.random() * 14) * 60000 });
+  }
+  $('#msg').textContent = 'Datos simulados, generados al azar. No corresponden a ningún estudiante.';
+  pinta(f, true);
+});
+
+function pinta(filas, demo) {
+  FILAS = filas;
+  const P = {};
+  filas.forEach((r) => {
+    if (!r.pid) return;
+    const p = P[r.pid] || (P[r.pid] = { pid: r.pid, sem: r.semestre || '', forma: r.forma_pre || '', pre: {}, post: {}, min: null });
+    const m = /^respuesta_(pre|post)$/.exec(r.evento);
+    if (m) p[m[1]][String(r.item).slice(0, 2)] = { ok: +r.correcta === 1, err: r.error, h: r.habilidad, txt: r.texto, ms: +r.ms };
+    if (r.evento === 'fin') p.min = Math.round(+r.ms / 60000);
+  });
+  const ps = Object.values(P), n = ITEMS.length;
+  const cuenta = (o) => Object.values(o).filter((x) => x.ok).length;
+  const comp = ps.filter((p) => Object.keys(p.pre).length === n && Object.keys(p.post).length === n);
+  const prom = (f) => comp.length ? (comp.reduce((s, p) => s + f(p), 0) / comp.length).toFixed(2) : '0';
+
+  let h = `<div class="datos">
+    <div class="dato"><b>${ps.length}</b><span>Participantes que iniciaron</span></div>
+    <div class="dato"><b>${comp.length}</b><span>Sesiones completas</span></div>
+    <div class="dato"><b>${prom((p) => cuenta(p.pre))} de ${n}</b><span>Promedio inicial</span></div>
+    <div class="dato"><b>${prom((p) => cuenta(p.post))} de ${n}</b><span>Promedio final</span></div></div>
+    <h2>Porcentaje de aciertos por habilidad en sesiones completas</h2>
+    <p class="ley"><span><i style="background:var(--gris)"></i>Inicial</span><span><i style="background:var(--vino)"></i>Final</span></p>`;
+  ITEMS.forEach((it) => {
+    const a = pct(comp.filter((p) => p.pre[it.id].ok).length, comp.length), b = pct(comp.filter((p) => p.post[it.id].ok).length, comp.length);
+    h += `<div class="bar"><span>${HABILIDADES[it.h]}</span><span class="pista"><i class="pre" style="width:${a}%"></i><i class="post" style="width:${b}%"></i></span><span class="r" style="text-align:right">${a}% → ${b}%</span></div>`;
+  });
+
+  const err = {};
+  ps.forEach((p) => ['pre', 'post'].forEach((f) => Object.values(p[f]).forEach((x) => { if (x.err) { err[x.err] = err[x.err] || { pre: 0, post: 0 }; err[x.err][f]++; } })));
+  h += `<h2>Frecuencia de cada tipo de error</h2><table><thead><tr><th>Error</th><th class="r">Inicial</th><th class="r">Final</th></tr></thead><tbody>${
+    Object.entries(err).sort((a, b) => b[1].pre - a[1].pre).map(([k, v]) => `<tr><td>${esc(ERRORES[k] || k)}</td><td class="r">${v.pre}</td><td class="r">${v.post}</td></tr>`).join('')}</tbody></table>`;
+
+  h += `<h2>Resultados por participante</h2><div class="scroll"><table><thead><tr><th>Participante</th><th>Semestre</th><th>Forma inicial</th><th class="r">Inicial</th><th class="r">Final</th><th class="r">Diferencia</th><th class="r">Minutos</th></tr></thead><tbody>${
+    ps.map((p) => { const a = cuenta(p.pre), b = Object.keys(p.post).length ? cuenta(p.post) : null;
+      return `<tr><td>${esc(p.pid)}</td><td>${esc(p.sem)}</td><td>${esc(p.forma)}</td><td class="r">${a}</td><td class="r">${b === null ? 'sin terminar' : b}</td><td class="r">${b === null ? '' : (b - a > 0 ? '+' : '') + (b - a)}</td><td class="r">${p.min === null ? '' : p.min}</td></tr>`; }).join('')}</tbody></table></div>`;
+
+  const abiertas = [];
+  ps.forEach((p) => ['pre', 'post'].forEach((f) => Object.entries(p[f]).forEach(([id, x]) => { if (x.txt) abiertas.push([p.pid, f === 'pre' ? 'Inicial' : 'Final', id, x.ok ? 'Correcta' : 'Incorrecta', x.txt]); })));
+  h += `<h2>Sustentos escritos para corregir con rúbrica</h2><div class="scroll"><table><thead><tr><th>Participante</th><th>Fase</th><th>Ítem</th><th>Alternativa</th><th>Sustento</th></tr></thead><tbody>${
+    abiertas.map((a) => `<tr>${a.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <div class="acciones">${demo ? '' : '<button class="btn" id="csv">Descargar todos los eventos en CSV</button>'}</div>`;
+  $('#out').innerHTML = h;
+  const b = $('#csv');
+  b && b.addEventListener('click', () => {
+    const cols = Object.keys(FILAS[0] || {});
+    const txt = '﻿' + [cols.join(',')].concat(FILAS.map((r) => cols.map((c) => `"${String(r[c] ?? '').replace(/"/g, '""')}"`).join(','))).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv' })); a.download = 'eventos.csv'; a.click();
+  });
+}
+</script>
+</body>
+</html>

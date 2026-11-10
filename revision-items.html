@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Revisión de ítems</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/estilo.css">
+<style>main{max-width:860px;margin:0 auto} .par{display:grid;grid-template-columns:1fr 1fr;gap:28px} li{font-weight:400;font-size:14.5px;margin-bottom:6px} ul{padding-left:18px} .ok{color:var(--ok);font-weight:500} @media print{.par{break-inside:avoid}}</style>
+</head>
+<body>
+<main>
+  <p class="sobre">Uso interno</p>
+  <h1>Ítems del diagnóstico y mapa de habilidades</h1>
+  <p class="lead">Documento para validar los ítems con otro docente. Se genera a partir de <code>js/items.js</code>, por lo que siempre muestra la versión vigente. Puede imprimirse o guardarse en PDF.</p>
+  <p class="nota">Fuentes: PD3 2026-2 (conjuntos de vectores), solucionario de la PD3 2024-2 y solucionario de la PC1 2026-2 (bloque de comentes). En la web, el orden de las alternativas se baraja.</p>
+  <div id="out"></div>
+</main>
+<script src="js/items.js"></script>
+<script>
+document.getElementById('out').innerHTML = ITEMS.map((p) => `
+  <h2>${p.id}. ${HABILIDADES[p.h]}${p.abierta ? ' (con sustento escrito)' : ''}</h2>
+  <div class="par">${['A', 'B'].map((f) => { const it = p[f]; return `<div><h3>Forma ${f}</h3>
+    <p style="font-weight:400">${it.enun}</p>${it.cita ? `<p class="cita" style="font-weight:400">${it.cita}</p>` : ''}
+    ${it.fig ? `<p class="nota">Figura: a = (${it.fig.a}), b = (${it.fig.b}), c = (${it.fig.c}).</p>` : ''}
+    <ul>${it.ops.map((o) => `<li>${o.t} ${o.ok ? '<span class="ok">Correcta.</span>' : `<span class="nota">Error: ${ERRORES[o.err].toLowerCase()}.</span>`}</li>`).join('')}</ul>
+    <p class="nota">Explicación en el diagnóstico final: ${it.exp}</p></div>`; }).join('')}</div>`).join('');
+</script>
+</body>
+</html>
